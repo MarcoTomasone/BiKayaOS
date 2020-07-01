@@ -20,49 +20,10 @@
  *      Modified by Mattia Maldini, Renzo Davoli 2020
  */
 #ifdef TARGET_UMPS
-
-/* Values for CP0 Cause.ExcCode */
-#define EXC_INTERRUPT      0
-#define EXC_TLBMOD         1
-#define EXC_TLBINVLOAD     2
-#define EXC_TLBINVSTORE    3
-#define EXC_ADDRINVLOAD    4
-#define EXC_ADDRINVSTORE   5
-#define EXC_BUSINVFETCH    6
-#define EXC_BUSINVLDSTORE  7
-#define EXC_SYSCALL        8
-#define EXC_BREAKPOINT     9
-#define EXC_RESERVEDINSTR  10
-#define EXC_COPROCUNUSABLE 11
-#define EXC_ARITHOVERFLOW  12
-#define EXC_BADPTE         13
-#define EXC_PTEMISS        14
-
-/* Interrupt lines used by the devices */
-#define INT_T_SLICE  1 /* time slice interrupt */
-#define INT_TIMER    2 /* timer interrupt */
-#define INT_LOWEST   3 /* minimum interrupt number used by real devices */
-#define INT_DISK     3
-#define INT_TAPE     4
-#define INT_UNUSED   5 /* network? */
-#define INT_PRINTER  6
-#define INT_TERMINAL 7
-
-#define FRAMESIZE 4096
-
-#define DEV_USED_INTS 5 /* Number of ints reserved for devices: 3,4,5,6,7 */
-#define DEV_PER_INT   8 /* Maximum number of devices per interrupt line */
-
-#endif
-
-#ifdef TARGET_UARM
-#include "uarm/uARMconst.h"
-#endif
-
-#ifdef TARGET_UMPS
-#include "umps/libumps.h"
-#include "umps/arch.h"
-#include "umps/types.h"
+#define EXC_BUSINVFETCH 6
+#include "./include/uMPS/libumps.h"
+#include "./include/uMPS/arch.h"
+#include "./include/uMPS/types.h"
 #define FRAME_SIZE 4096
 /* Elapsed clock ticks (CPU instructions executed) since system power on.
    Only the "low" part is actually used. */
@@ -85,9 +46,9 @@
 #endif
 
 #ifdef TARGET_UARM
-#include "uarm/libuarm.h"
-#include "uarm/arch.h"
-#include "uarm/uARMtypes.h"
+#include "./include/uARM/uarm/libuarm.h"
+#include "./include/uARM/uarm/arch.h"
+#include "./include/uARM/uarm/uARMtypes.h"
 
 #define VMON  0x00000001
 #define VMOFF (~VMON)
@@ -171,18 +132,19 @@ pid_t leaf1pid, leaf2pid, leaf3pid, leaf4pid;
 void p2(), p3(), p4(), p4a(), p4b(), p5(), p6(), p6a();
 void p7root(), child1(), child2(), p7leaf();
 
-unsigned int set_sp_pc_status(state_t *s, state_t *copy, unsigned int pc) {
+unsigned int set_sp_pc_status(state_t *s, state_t *copy, unsigned int pc, unsigned int frames) {
     STST(s);
 
 #ifdef TARGET_UMPS
-    s->reg_sp = copy->reg_sp - FRAME_SIZE;
+    s->reg_sp = copy->reg_sp - FRAME_SIZE * frames;
+    //s->pc_epc = s->reg_t9 = pc;
     s->pc_epc = pc;
     s->status = STATUS_ALL_INT_ENABLE(s->status);
     return s->reg_sp;
 #endif
 
 #ifdef TARGET_UARM
-    s->sp   = copy->sp - FRAME_SIZE;
+    s->sp   = copy->sp - FRAME_SIZE * frames;
     s->pc   = pc;
     s->cpsr = STATUS_ALL_INT_ENABLE(s->cpsr);
     return s->sp;
@@ -239,32 +201,32 @@ void test() {
     /* set up states of the other processes */
 
     /* set up p2's state */
-    set_sp_pc_status(&p2state, &p2state, (unsigned int)p2);
+    set_sp_pc_status(&p2state, &p2state, (unsigned int)p2, 1);
 
     /* Set up p3's state */
-    set_sp_pc_status(&p3state, &p2state, (unsigned int)p3);
+    set_sp_pc_status(&p3state, &p2state, (unsigned int)p3, 1);
 
     /* Set up p4's state */
-    p4Stack = set_sp_pc_status(&p4state, &p3state, (unsigned int)p4);
+    p4Stack = set_sp_pc_status(&p4state, &p3state, (unsigned int)p4, 1);
 
     /* Set up p5's state */
-    set_sp_pc_status(&p5state, &p4state, (unsigned int)p5);
+    set_sp_pc_status(&p5state, &p4state, (unsigned int)p5, 2);
 
     /* Set up p6's state */
-    set_sp_pc_status(&p6state, &p5state, (unsigned int)p6);
+    set_sp_pc_status(&p6state, &p5state, (unsigned int)p6, 1);
 
     /* Set up p7's state */
-    set_sp_pc_status(&p7rootstate, &p6state, (unsigned int)p7root);
+    set_sp_pc_status(&p7rootstate, &p6state, (unsigned int)p7root, 1);
 
     /* Set up p7 children's state */
-    set_sp_pc_status(&child1state, &p7rootstate, (unsigned int)child1);
-    set_sp_pc_status(&child2state, &child1state, (unsigned int)child2);
+    set_sp_pc_status(&child1state, &p7rootstate, (unsigned int)child1, 1);
+    set_sp_pc_status(&child2state, &child1state, (unsigned int)child2, 1);
 
     /* Set up p7 grandchildren's state */
-    set_sp_pc_status(&gchild1state, &child2state, (unsigned int)p7leaf);
-    set_sp_pc_status(&gchild2state, &gchild1state, (unsigned int)p7leaf);
-    set_sp_pc_status(&gchild3state, &gchild2state, (unsigned int)p7leaf);
-    set_sp_pc_status(&gchild4state, &gchild3state, (unsigned int)p7leaf);
+    set_sp_pc_status(&gchild1state, &child2state, (unsigned int)p7leaf, 1);
+    set_sp_pc_status(&gchild2state, &gchild1state, (unsigned int)p7leaf, 1);
+    set_sp_pc_status(&gchild3state, &gchild2state, (unsigned int)p7leaf, 1);
+    set_sp_pc_status(&gchild4state, &gchild3state, (unsigned int)p7leaf, 1);
 
     /* create process p2 */
     SYSCALL(CREATEPROCESS, (int)&p2state, DEFAULT_PRIORITY, 0); /* start p2     */
@@ -327,6 +289,8 @@ void test() {
     PANIC(); /* PANIC !!!     */
 }
 
+unsigned int variable = 0;
+
 
 /* p2 -- semaphore and cputime-SYS test process */
 void p2() {
@@ -367,6 +331,7 @@ void p2() {
     SYSCALL(GETCPUTIME, (int)&user_t2, (int)&kernel_t2, (int)&wallclock_t2); /* CPU time used */
     now2 = getTODLO();                                                       /* time of day  */
 
+    variable = user_t2 - user_t1;
     if (((user_t2 - user_t1) >= (kernel_t2 - kernel_t1)) && ((wallclock_t2 - wallclock_t1) >= (user_t2 - user_t1)) &&
         ((now2 - now1) >= (wallclock_t2 - wallclock_t1)) && ((user_t2 - user_t1) >= MINLOOPTIME)) {
         print("p2 (semaphores and time check) is OK\n");
@@ -385,7 +350,7 @@ void p2() {
     p1p2synch = 1; /* p1 will check this */
 
     SYSCALL(VERHOGEN, (int)&endp2, 0, 0); /* V(endp2)     */
-    //print("HELO\n");
+
     SYSCALL(TERMINATEPROCESS, 0, 0, 0); /* terminate p2 */
 
     /* just did a SYS2, so should not get to this point */
@@ -584,9 +549,12 @@ void p5() {
     PANIC();
 }
 
+void accidenti(){}
+
 /*p6 -- program trap without initializing passup vector*/
 void p6() {
     print("p6 starts (and hopefully dies)\n");
+    accidenti();
 
     *((memaddr *)BADADDR) = 0;
 
